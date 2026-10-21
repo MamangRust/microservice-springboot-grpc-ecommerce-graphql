@@ -1,0 +1,37 @@
+type Cart {
+    id: ID!
+    userId: Int
+    productId: Int
+    name: String
+    price: Int
+    image: String
+    quantity: Int
+    weight: Int
+    createdAt: String
+    updatedAt: String
+}
+
+type CartPage {
+    data: [Cart!]!
+    pagination: PaginationMeta!
+}
+
+input CreateCartInput {
+    quantity: Int!
+    productId: ID!
+    userId: ID!
+}
+
+input DeleteCartInput {
+    cartIds: [ID!]!
+}
+
+extend type Query {
+    carts(userId: ID, page: Int = 1, pageSize: Int = 10, search: String = ""): CartPage!
+}
+
+extend type Mutation {
+    createCart(input: CreateCartInput!): Cart!
+    deleteCart(id: ID!): Boolean!
+    deleteAllCarts(input: DeleteCartInput!): Boolean!
+}

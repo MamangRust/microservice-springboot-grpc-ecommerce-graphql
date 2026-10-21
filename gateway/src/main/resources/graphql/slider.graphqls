@@ -1,0 +1,53 @@
+type Slider {
+    id: ID!
+    name: String
+    image: String
+    createdAt: String
+    updatedAt: String
+}
+
+type SliderDeleteAt {
+    id: ID!
+    name: String
+    image: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type SliderPage {
+    data: [Slider!]!
+    pagination: PaginationMeta!
+}
+
+type SliderDeleteAtPage {
+    data: [SliderDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+input CreateSliderInput {
+    name: String!
+    image: String
+}
+
+input UpdateSliderInput {
+    sliderId: ID!
+    name: String
+    image: String
+}
+
+extend type Query {
+    sliders(page: Int = 1, pageSize: Int = 10, search: String = ""): SliderPage!
+    activeSliders(page: Int = 1, pageSize: Int = 10, search: String = ""): SliderDeleteAtPage!
+    trashedSliders(page: Int = 1, pageSize: Int = 10, search: String = ""): SliderDeleteAtPage!
+}
+
+extend type Mutation {
+    createSlider(input: CreateSliderInput!): Slider!
+    updateSlider(input: UpdateSliderInput!): Slider!
+    trashSlider(id: ID!): SliderDeleteAt!
+    restoreSlider(id: ID!): SliderDeleteAt!
+    deleteSliderPermanent(id: ID!): Boolean!
+    restoreAllSliders: Boolean!
+    deleteAllSlidersPermanent: Boolean!
+}

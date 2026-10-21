@@ -1,0 +1,72 @@
+type Order {
+    id: ID!
+    merchantId: Int
+    userId: Int
+    totalPrice: Int
+    createdAt: String
+    updatedAt: String
+}
+
+type OrderDeleteAt {
+    id: ID!
+    merchantId: Int
+    userId: Int
+    totalPrice: Int
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type OrderPage {
+    data: [Order!]!
+    pagination: PaginationMeta!
+}
+
+type OrderDeleteAtPage {
+    data: [OrderDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+input OrderItemInput {
+    productId: ID!
+    quantity: Int
+    price: Int
+}
+
+input UpdateOrderItemInput {
+    orderItemId: ID!
+    productId: ID
+    quantity: Int
+    price: Int
+}
+
+input CreateOrderInput {
+    merchantId: ID!
+    userId: ID!
+    items: [OrderItemInput!]
+    shippingAddress: CreateShippingAddressInput
+}
+
+input UpdateOrderInput {
+    orderId: ID!
+    userId: ID!
+    items: [UpdateOrderItemInput!]
+    shippingAddress: UpdateShippingAddressInput
+}
+
+extend type Query {
+    orders(page: Int = 1, pageSize: Int = 10, search: String = ""): OrderPage!
+    order(id: ID!): Order!
+    activeOrders(page: Int = 1, pageSize: Int = 10, search: String = ""): OrderDeleteAtPage!
+    trashedOrders(page: Int = 1, pageSize: Int = 10, search: String = ""): OrderDeleteAtPage!
+}
+
+extend type Mutation {
+    createOrder(input: CreateOrderInput!): Order!
+    updateOrder(input: UpdateOrderInput!): Order!
+    trashOrder(id: ID!): OrderDeleteAt!
+    restoreOrder(id: ID!): OrderDeleteAt!
+    deleteOrderPermanent(id: ID!): Boolean!
+    restoreAllOrders: Boolean!
+    deleteAllOrdersPermanent: Boolean!
+}

@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stats-backfill
+  namespace: ecommerce
+spec:
+  # Manual job: apply it explicitly when historical OLTP rows need to be
+  # materialized into ClickHouse. Re-running is safe — the loader re-inserts
+  # append-only rows, so run once per backfill window.
+  backoffLimit: 3
+  template:
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.35
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "[INIT] Waiting for the source PostgreSQL (transactions) + ClickHouse..."
+              # The Spring Boot backfill reads aggregated revenue directly
+              # from the per-context transaction DB and writes to ClickHouse.
+              until nc -z postgres-sales.ecommerce.svc.cluster.local 5432 \
+                && nc -z clickhouse.ecommerce.svc.cluster.local 8123; do
+                echo "Dependencies not ready yet. Retrying in 5 seconds..."
+                sleep 5
+              done
+              echo "[INIT] All dependencies are ready!"
+      containers:
+        - name: stats-backfill
+          # Separate Spring Boot module (modular-grpc-restapi build).
+          image: ghcr.io/__GHCR_OWNER__/springboot-ecommerce/stats-backfill:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: clickhouse.url
+              value: "jdbc:clickhouse://clickhouse.ecommerce.svc.cluster.local:8123/ecommerce"
+            - name: clickhouse.username
+              value: "dragon"
+            # Schema-correct backfill query: real transactions table has
+            # (merchant_id, amount, created_at); product_id is not a column, so it
+            # is fixed to 0 to stay consistent with the live stats.*.event producer.
+            - name: BACKFILL_SQL
+              value: "SELECT to_char(created_at, 'YYYY-MM') AS period, COALESCE(merchant_id, 0) AS merchant_id, 0 AS product_id, SUM(amount) AS revenue FROM transactions GROUP BY 1, 2"
+            - name: backfill.source.url
+              value: "jdbc:postgresql://postgres-sales.ecommerce.svc.cluster.local:5432/ecommerce"
+            - name: backfill.source.user
+              value: "DRAGON"
+            - name: backfill.source.password
+              value: "DRAGON"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: app-logs
+              mountPath: /var/log/app
+      volumes:
+        - name: app-logs
+          persistentVolumeClaim:
+            claimName: app-logs-pvc
+      restartPolicy: OnFailure

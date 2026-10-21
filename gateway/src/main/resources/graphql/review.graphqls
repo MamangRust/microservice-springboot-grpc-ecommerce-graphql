@@ -1,0 +1,127 @@
+type Review {
+    id: ID!
+    userId: Int
+    productId: Int
+    name: String
+    comment: String
+    rating: Int
+    createdAt: String
+    updatedAt: String
+}
+
+type ReviewDeleteAt {
+    id: ID!
+    userId: Int
+    productId: Int
+    name: String
+    comment: String
+    rating: Int
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type ReviewDetail {
+    id: ID!
+    reviewId: Int
+    type: String
+    url: String
+    caption: String
+    createdAt: String
+    updatedAt: String
+}
+
+type ReviewDetailDeleteAt {
+    id: ID!
+    reviewId: Int
+    type: String
+    url: String
+    caption: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type ReviewRelationsDetail {
+    id: ID!
+    userId: Int
+    productId: Int
+    name: String
+    comment: String
+    rating: Int
+    reviewDetail: [ReviewDetail!]!
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type ReviewPage {
+    data: [Review!]!
+    pagination: PaginationMeta!
+}
+
+type ReviewDeleteAtPage {
+    data: [ReviewDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+type ReviewRelationsDetailPage {
+    data: [ReviewRelationsDetail!]!
+    pagination: PaginationMeta!
+}
+
+input CreateReviewInput {
+    userId: ID!
+    productId: ID!
+    rating: Int!
+    comment: String
+}
+
+input UpdateReviewInput {
+    reviewId: ID!
+    name: String
+    rating: Int!
+    comment: String
+}
+
+input CreateReviewDetailInput {
+    reviewId: ID!
+    type: String!
+    "URL produced by POST /api/upload"
+    url: String
+    caption: String
+}
+
+input UpdateReviewDetailInput {
+    reviewDetailId: ID!
+    type: String
+    url: String
+    caption: String
+}
+
+extend type Query {
+    reviews(page: Int = 1, pageSize: Int = 20, search: String = ""): ReviewPage!
+    activeReviews(page: Int = 1, pageSize: Int = 20, search: String = ""): ReviewDeleteAtPage!
+    trashedReviews(page: Int = 1, pageSize: Int = 20, search: String = ""): ReviewDeleteAtPage!
+    reviewsByProduct(productId: ID!, page: Int = 1, pageSize: Int = 20, search: String = ""): ReviewRelationsDetailPage!
+    reviewsByMerchant(merchantId: ID!, page: Int = 1, pageSize: Int = 20, search: String = ""): ReviewRelationsDetailPage!
+    review(reviewId: ID!): Review!
+}
+
+extend type Mutation {
+    createReview(input: CreateReviewInput!): Review!
+    updateReview(input: UpdateReviewInput!): Review!
+    trashReview(reviewId: ID!): ReviewDeleteAt!
+    restoreReview(reviewId: ID!): ReviewDeleteAt!
+    deleteReviewPermanent(reviewId: ID!): Boolean!
+    restoreAllReviews: Boolean!
+    deleteAllReviewsPermanent: Boolean!
+
+    createReviewDetail(input: CreateReviewDetailInput!): ReviewDetail!
+    updateReviewDetail(input: UpdateReviewDetailInput!): ReviewDetail!
+    trashReviewDetail(reviewDetailId: ID!): ReviewDetailDeleteAt!
+    restoreReviewDetail(reviewDetailId: ID!): ReviewDetailDeleteAt!
+    deleteReviewDetailPermanent(reviewDetailId: ID!): Boolean!
+    restoreAllReviewDetails: Boolean!
+    deleteAllReviewDetailsPermanent: Boolean!
+}

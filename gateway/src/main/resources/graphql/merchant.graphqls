@@ -1,0 +1,395 @@
+type Merchant {
+    id: ID!
+    userId: Int
+    name: String
+    description: String
+    address: String
+    contactEmail: String
+    contactPhone: String
+    status: String
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantDeleteAt {
+    id: ID!
+    userId: Int
+    name: String
+    description: String
+    address: String
+    contactEmail: String
+    contactPhone: String
+    status: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantAward {
+    id: ID!
+    merchantId: Int
+    title: String
+    description: String
+    issuedBy: String
+    issueDate: String
+    expiryDate: String
+    certificateUrl: String
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantAwardDeleteAt {
+    id: ID!
+    merchantId: Int
+    title: String
+    description: String
+    issuedBy: String
+    issueDate: String
+    expiryDate: String
+    certificateUrl: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantBusiness {
+    id: ID!
+    merchantId: Int
+    businessType: String
+    taxId: String
+    establishedYear: Int
+    numberOfEmployees: Int
+    websiteUrl: String
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantBusinessDeleteAt {
+    id: ID!
+    merchantId: Int
+    businessType: String
+    taxId: String
+    establishedYear: Int
+    numberOfEmployees: Int
+    websiteUrl: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantPolicy {
+    id: ID!
+    merchantId: Int
+    policyType: String
+    title: String
+    description: String
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantPolicyDeleteAt {
+    id: ID!
+    merchantId: Int
+    policyType: String
+    title: String
+    description: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantSocialMediaLink {
+    id: ID!
+    platform: String
+    url: String
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantSocialMediaLinkDeleteAt {
+    id: ID!
+    platform: String
+    url: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantDetail {
+    id: ID!
+    merchantId: Int
+    displayName: String
+    coverImageUrl: String
+    logoUrl: String
+    shortDescription: String
+    websiteUrl: String
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantDetailDeleteAt {
+    id: ID!
+    merchantId: Int
+    displayName: String
+    coverImageUrl: String
+    logoUrl: String
+    shortDescription: String
+    websiteUrl: String
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantDetailRelation {
+    id: ID!
+    merchantId: Int
+    displayName: String
+    coverImageUrl: String
+    logoUrl: String
+    shortDescription: String
+    websiteUrl: String
+    socialMediaLinks: [MerchantSocialMediaLink!]!
+    createdAt: String
+    updatedAt: String
+}
+
+type MerchantDetailRelationDeleteAt {
+    id: ID!
+    merchantId: Int
+    displayName: String
+    coverImageUrl: String
+    logoUrl: String
+    shortDescription: String
+    websiteUrl: String
+    socialMediaLinks: [MerchantSocialMediaLink!]!
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type MerchantPage {
+    data: [Merchant!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantDeleteAtPage {
+    data: [MerchantDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantAwardPage {
+    data: [MerchantAward!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantAwardDeleteAtPage {
+    data: [MerchantAwardDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantBusinessPage {
+    data: [MerchantBusiness!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantBusinessDeleteAtPage {
+    data: [MerchantBusinessDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantPolicyPage {
+    data: [MerchantPolicy!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantPolicyDeleteAtPage {
+    data: [MerchantPolicyDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantDetailRelationPage {
+    data: [MerchantDetailRelation!]!
+    pagination: PaginationMeta!
+}
+
+type MerchantDetailRelationDeleteAtPage {
+    data: [MerchantDetailRelationDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+input CreateMerchantInput {
+    userId: ID!
+    name: String!
+    description: String
+    address: String
+    contactEmail: String
+    contactPhone: String
+    status: String
+}
+
+input UpdateMerchantInput {
+    merchantId: ID!
+    userId: ID!
+    name: String
+    description: String
+    address: String
+    contactEmail: String
+    contactPhone: String
+    status: String
+}
+
+input CreateMerchantAwardInput {
+    merchantId: ID!
+    title: String!
+    description: String
+    issuedBy: String
+    issueDate: String
+    expiryDate: String
+    certificateUrl: String
+}
+
+input UpdateMerchantAwardInput {
+    merchantCertificationId: ID!
+    title: String
+    description: String
+    issuedBy: String
+    issueDate: String
+    expiryDate: String
+    certificateUrl: String
+}
+
+input CreateMerchantBusinessInput {
+    merchantId: ID!
+    businessType: String
+    taxId: String
+    establishedYear: Int
+    numberOfEmployees: Int
+    websiteUrl: String
+}
+
+input UpdateMerchantBusinessInput {
+    merchantBusinessInfoId: ID!
+    businessType: String
+    taxId: String
+    establishedYear: Int
+    numberOfEmployees: Int
+    websiteUrl: String
+}
+
+input CreateMerchantPolicyInput {
+    merchantId: ID!
+    policyType: String
+    title: String!
+    description: String
+}
+
+input UpdateMerchantPolicyInput {
+    merchantPolicyId: ID!
+    policyType: String
+    title: String
+    description: String
+}
+
+input CreateMerchantSocialInput {
+    merchantDetailId: ID!
+    platform: String!
+    url: String!
+}
+
+input UpdateMerchantSocialInput {
+    id: ID!
+    merchantDetailId: ID!
+    platform: String
+    url: String
+}
+
+input CreateMerchantDetailInput {
+    merchantId: ID!
+    displayName: String!
+    coverImageUrl: String
+    logoUrl: String
+    shortDescription: String
+    websiteUrl: String
+}
+
+input UpdateMerchantDetailInput {
+    merchantDetailId: ID!
+    displayName: String
+    coverImageUrl: String
+    logoUrl: String
+    shortDescription: String
+    websiteUrl: String
+}
+
+extend type Query {
+    merchants(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantPage!
+    merchant(id: ID!): Merchant!
+    activeMerchants(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantDeleteAtPage!
+    trashedMerchants(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantDeleteAtPage!
+
+    merchantAwards(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantAwardPage!
+    merchantAward(id: ID!): MerchantAward!
+    activeMerchantAwards(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantAwardDeleteAtPage!
+    trashedMerchantAwards(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantAwardDeleteAtPage!
+
+    merchantBusinesses(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantBusinessPage!
+    merchantBusiness(id: ID!): MerchantBusiness!
+    activeMerchantBusinesses(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantBusinessDeleteAtPage!
+    trashedMerchantBusinesses(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantBusinessDeleteAtPage!
+
+    merchantPolicies(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantPolicyPage!
+    merchantPolicy(id: ID!): MerchantPolicy!
+    activeMerchantPolicies(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantPolicyDeleteAtPage!
+    trashedMerchantPolicies(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantPolicyDeleteAtPage!
+
+    merchantDetails(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantDetailRelationPage!
+    merchantDetail(id: ID!): MerchantDetailRelation!
+    activeMerchantDetails(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantDetailRelationDeleteAtPage!
+    trashedMerchantDetails(page: Int = 1, pageSize: Int = 10, search: String = ""): MerchantDetailRelationDeleteAtPage!
+}
+
+extend type Mutation {
+    createMerchant(input: CreateMerchantInput!): Merchant!
+    updateMerchant(input: UpdateMerchantInput!): Merchant!
+    trashMerchant(id: ID!): MerchantDeleteAt!
+    restoreMerchant(id: ID!): MerchantDeleteAt!
+    deleteMerchantPermanent(id: ID!): Boolean!
+    restoreAllMerchants: Boolean!
+    deleteAllMerchantsPermanent: Boolean!
+
+    createMerchantAward(input: CreateMerchantAwardInput!): MerchantAward!
+    updateMerchantAward(input: UpdateMerchantAwardInput!): MerchantAward!
+    trashMerchantAward(id: ID!): MerchantAwardDeleteAt!
+    restoreMerchantAward(id: ID!): MerchantAwardDeleteAt!
+    deleteMerchantAwardPermanent(id: ID!): Boolean!
+    restoreAllMerchantAwards: Boolean!
+    deleteAllMerchantAwardsPermanent: Boolean!
+
+    createMerchantBusiness(input: CreateMerchantBusinessInput!): MerchantBusiness!
+    updateMerchantBusiness(input: UpdateMerchantBusinessInput!): MerchantBusiness!
+    trashMerchantBusiness(id: ID!): MerchantBusinessDeleteAt!
+    restoreMerchantBusiness(id: ID!): MerchantBusinessDeleteAt!
+    deleteMerchantBusinessPermanent(id: ID!): Boolean!
+    restoreAllMerchantBusinesses: Boolean!
+    deleteAllMerchantBusinessesPermanent: Boolean!
+
+    createMerchantPolicy(input: CreateMerchantPolicyInput!): MerchantPolicy!
+    updateMerchantPolicy(input: UpdateMerchantPolicyInput!): MerchantPolicy!
+    trashMerchantPolicy(id: ID!): MerchantPolicyDeleteAt!
+    restoreMerchantPolicy(id: ID!): MerchantPolicyDeleteAt!
+    deleteMerchantPolicyPermanent(id: ID!): Boolean!
+    restoreAllMerchantPolicies: Boolean!
+    deleteAllMerchantPoliciesPermanent: Boolean!
+
+    createMerchantDetail(input: CreateMerchantDetailInput!): MerchantDetail!
+    updateMerchantDetail(input: UpdateMerchantDetailInput!): MerchantDetail!
+    trashMerchantDetail(id: ID!): MerchantDetailDeleteAt!
+    restoreMerchantDetail(id: ID!): MerchantDetailDeleteAt!
+    deleteMerchantDetailPermanent(id: ID!): Boolean!
+    restoreAllMerchantDetails: Boolean!
+    deleteAllMerchantDetailsPermanent: Boolean!
+
+    "merchant_social_link only exposes create/update over gRPC."
+    createMerchantSocial(input: CreateMerchantSocialInput!): MerchantSocialMediaLink!
+    updateMerchantSocial(input: UpdateMerchantSocialInput!): MerchantSocialMediaLink!
+}

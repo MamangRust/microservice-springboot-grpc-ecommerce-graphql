@@ -1,0 +1,70 @@
+type Banner {
+    id: ID!
+    name: String
+    startDate: String
+    endDate: String
+    startTime: String
+    endTime: String
+    isActive: Boolean
+    createdAt: String
+    updatedAt: String
+}
+
+type BannerDeleteAt {
+    id: ID!
+    name: String
+    startDate: String
+    endDate: String
+    startTime: String
+    endTime: String
+    isActive: Boolean
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type BannerPage {
+    data: [Banner!]!
+    pagination: PaginationMeta!
+}
+
+type BannerDeleteAtPage {
+    data: [BannerDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+input CreateBannerInput {
+    name: String!
+    startDate: String
+    endDate: String
+    startTime: String
+    endTime: String
+    isActive: Boolean
+}
+
+input UpdateBannerInput {
+    bannerId: ID!
+    name: String
+    startDate: String
+    endDate: String
+    startTime: String
+    endTime: String
+    isActive: Boolean
+}
+
+extend type Query {
+    banners(page: Int = 1, pageSize: Int = 10, search: String = ""): BannerPage!
+    banner(id: ID!): Banner!
+    activeBanners(page: Int = 1, pageSize: Int = 10, search: String = ""): BannerDeleteAtPage!
+    trashedBanners(page: Int = 1, pageSize: Int = 10, search: String = ""): BannerDeleteAtPage!
+}
+
+extend type Mutation {
+    createBanner(input: CreateBannerInput!): Banner!
+    updateBanner(input: UpdateBannerInput!): Banner!
+    trashBanner(id: ID!): BannerDeleteAt!
+    restoreBanner(id: ID!): BannerDeleteAt!
+    deleteBannerPermanent(id: ID!): Boolean!
+    restoreAllBanners: Boolean!
+    deleteAllBannersPermanent: Boolean!
+}

@@ -1,0 +1,75 @@
+type ShippingAddress {
+    id: ID!
+    orderId: Int
+    alamat: String
+    provinsi: String
+    negara: String
+    kota: String
+    shippingMethod: String
+    shippingCost: Int
+    createdAt: String
+    updatedAt: String
+}
+
+type ShippingAddressDeleteAt {
+    id: ID!
+    orderId: Int
+    alamat: String
+    provinsi: String
+    negara: String
+    kota: String
+    shippingMethod: String
+    shippingCost: Int
+    createdAt: String
+    updatedAt: String
+    deletedAt: String
+}
+
+type ShippingAddressPage {
+    data: [ShippingAddress!]!
+    pagination: PaginationMeta!
+}
+
+type ShippingAddressDeleteAtPage {
+    data: [ShippingAddressDeleteAt!]!
+    pagination: PaginationMeta!
+}
+
+input CreateShippingAddressInput {
+    orderId: ID!
+    alamat: String!
+    provinsi: String
+    kota: String
+    courier: String
+    shippingMethod: String
+    shippingCost: Int
+    negara: String
+}
+
+input UpdateShippingAddressInput {
+    shippingId: ID!
+    orderId: ID!
+    alamat: String
+    provinsi: String
+    kota: String
+    courier: String
+    shippingMethod: String
+    shippingCost: Int
+    negara: String
+}
+
+extend type Query {
+    shippingAddresses(page: Int = 1, pageSize: Int = 10, search: String = ""): ShippingAddressPage!
+    shippingAddress(shippingId: ID!): ShippingAddress!
+    shippingAddressByOrder(orderId: ID!): ShippingAddress!
+    activeShippingAddresses(page: Int = 1, pageSize: Int = 10, search: String = ""): ShippingAddressDeleteAtPage!
+    trashedShippingAddresses(page: Int = 1, pageSize: Int = 10, search: String = ""): ShippingAddressDeleteAtPage!
+}
+
+extend type Mutation {
+    trashShippingAddress(shippingId: ID!): ShippingAddressDeleteAt!
+    restoreShippingAddress(shippingId: ID!): ShippingAddressDeleteAt!
+    deleteShippingAddressPermanent(shippingId: ID!): Boolean!
+    restoreAllShippingAddresses: Boolean!
+    deleteAllShippingAddressesPermanent: Boolean!
+}
