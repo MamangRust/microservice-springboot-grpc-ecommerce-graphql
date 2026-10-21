@@ -1,10 +1,10 @@
-# Distributed Modular Monolith — E-Commerce Platform (Java Spring Boot)
+# Distributed Microservices — E-Commerce Platform (Java Spring Boot)
 
-A production-grade, highly resilient, and fully observable **modular-monolith e-commerce backend** built in **Java 21** using the **Spring Boot** framework (v3.5.6). Designed around domain-driven service boundaries following Clean Architecture and CQRS principles, it retains the operational and deployment simplicity of a single deployment unit while maintaining logical isolation typical of microservices.
+A production-grade, highly resilient, and fully observable **microservices e-commerce backend** built in **Java 21** using **Spring Boot** framework (v3.5.6). Designed around domain-driven service boundaries following Clean Architecture and CQRS principles, each service runs as an **independent JVM process** with its own gRPC server, database migrations, and caching layer — achieving true service-level isolation and independent deployability.
 
-Each e-commerce business domain — Users, Roles, Auth, Products, Categories, Cart, Orders, Shipping, Merchants, Reviews, Transactions, Banners, Sliders — lives in its own self-contained Maven module. These modules communicate synchronously via high-performance **gRPC** protocols and asynchronously using **Apache Kafka** event propagation, exposing a unified reactive entry point through a **REST API Gateway** powered by Spring Boot WebMvc.
+Each e-commerce business domain — Users, Roles, Auth, Products, Categories, Cart, Orders, Shipping, Merchants, Reviews, Transactions, Banners, Sliders — lives in its own self-contained Maven module, running as a **standalone microservice**. These services communicate synchronously via high-performance **gRPC** protocols and asynchronously using **Apache Kafka** event propagation, exposing a unified entry point through a **GraphQL API Gateway** powered by Spring GraphQL.
 
-The platform is fortified with a **comprehensive observability suite** (Prometheus, Grafana, Loki, Jaeger, OpenTelemetry), robust connection pooling via **PgBouncer**, **distributed Redis Cluster caching** with custom telemetry for each service, and Kubernetes configurations ready for production auto-scaling.
+The platform is fortified with a **comprehensive observability suite** (Prometheus, Grafana, Loki, Jaeger, OpenTelemetry), **distributed Redis caching** with custom telemetry for each service, **ClickHouse analytics**, and Kubernetes configurations ready for production auto-scaling.
 
 ---
 
@@ -12,7 +12,7 @@ The platform is fortified with a **comprehensive observability suite** (Promethe
 
 | Domain | Capabilities |
 | :--- | :--- |
-| **Auth & Users** | Secure registration, multi-factor login, stateless JWT access/refresh token lifecycle, password reset workflows, OTP email verification, and `/me` profile REST endpoint. |
+| **Auth & Users** | Secure registration, multi-factor login, stateless JWT access/refresh token lifecycle, password reset workflows, OTP email verification, and `/me` profile GraphQL endpoint. |
 | **Roles & RBAC** | Custom permission configuration, granular access control matrices, and sub-second permission evaluation cached via Redis. |
 | **Catalog & Products** | Full CRUD for products & categories, promo banners, and home slider carousels. |
 | **Cart & Commerce** | Add-to-cart, checkout workflows, order lifecycle management, order-item decomposition, and shipping address details. |
@@ -20,23 +20,25 @@ The platform is fortified with a **comprehensive observability suite** (Promethe
 | **Transactions** | Centralized financial audit ledger collecting transaction and payment events across the system, global search filters, and status tracking. |
 | **Reviews** | Product ratings & detailed review submissions post-purchase. |
 | **Email Worker** | Kafka-driven asynchronous worker dispatching critical notification emails (OTPs, login alerts, merchant onboarding notices, and transaction invoices) via SMTP. |
+| **ClickHouse Analytics** | Columnar analytics database for high-performance statistical queries — order revenue, merchant sales, transaction amounts, category prices. Three-component pipeline: stats-writer (Kafka→ClickHouse), stats-reader (gRPC→Redis cache), stats-backfill (PostgreSQL→outbox→Kafka→ClickHouse). |
+| **Transactional Outbox** | Reliable event publishing via outbox pattern — events written to DB within business transaction, relayed to Kafka by OutboxPublisher. Guarantees no event loss even during Kafka outages. |
 | **Observability** | Multi-dimensional metrics (Prometheus + Grafana), log aggregation (Loki + Logback), end-to-end distributed tracing (Jaeger + OpenTelemetry), and resource monitors (Node, Kafka, Postgres Exporters). |
-| **Deployment** | Local orchestration using Docker Compose (featuring a 6-node Redis Cluster and PgBouncer), and auto-scaling Kubernetes manifests configured with Horizontal Pod Autoscalers (HPA). |
+| **Deployment** | Local orchestration using Docker Compose with PostgreSQL, Redis, Kafka, and observability stack. Auto-scaling Kubernetes manifests with Horizontal Pod Autoscalers (HPA) and ArgoCD GitOps. |
 
 ---
 
 ## Architecture Overview
 
-The platform implements a **Distributed Modular Monolith** architecture. Each business service is logical, decoupled, and self-contained inside its own Maven submodule, possessing its own independent gRPC boundary. A **Spring Boot REST API Gateway** acts as the unified edge router, transforming client HTTP REST requests into fast gRPC downstream communications via Spring Boot gRPC clients.
+The platform implements a **Distributed Microservices** architecture. Each business service runs as an **independent JVM process** with its own gRPC server, database connection pool, and Flyway migrations. A **Spring Boot GraphQL API Gateway** acts as the unified edge router, transforming client GraphQL operations into fast gRPC downstream communications via Spring gRPC clients.
 
 ### Core Architecture Principles
 
-- **Domain-Driven Boundary Isolation**: Every service owns its database access, caching layers, and service logic, strictly forbidding cross-boundary database sharing.
+- **Service-Level Isolation**: Every microservice runs as an independent JVM process with its own gRPC server, database connection pool, caching layer, and Flyway migrations. No shared-memory coupling between services.
 - **Clean Architecture & CQRS**: Separation of concerns using `Handler (gRPC) → Service (Command/Query) → Repository (Command/Query)` layers ensures business logic remains clean, performant, and framework-agnostic.
-- **Servlet execution**: Powered entirely by the Spring Boot servlet (Tomcat) execution model, keeping the stack familiar and operationally simple while gRPC handles synchronous inter-service calls.
-- **PgBouncer Pooling**: Employs connection pooling to avoid PostgreSQL socket exhaustion across the multiple concurrent modular services.
-- **Event-Driven Resilience**: Apache Kafka decouples transaction events, ensuring side effects like email billing remain completely non-blocking.
-- **OTel Telemetry Integration**: Standardized OpenTelemetry middleware injects trace IDs across gRPC boundaries, allowing seamless trace propagation from the client REST gateway down to postgres operations.
+- **Execution**: Runs on the Spring Boot embedded Tomcat (servlet) runtime with Spring Data JPA and HikariCP connection pooling for high throughput with minimal resource footprints.
+- **Direct DB Connections**: Each service manages its own PostgreSQL connection pool with HikariCP, with configurable `max-size` and `acquisition-timeout` per service.
+- **Event-Driven Resilience**: Apache Kafka decouples transaction events via the transactional outbox pattern, ensuring side effects like email billing remain completely non-blocking.
+- **OTel Telemetry Integration**: Standardized OpenTelemetry middleware injects trace IDs across gRPC boundaries, allowing seamless trace propagation from the client GraphQL gateway down to postgres operations.
 
 ```mermaid
 graph TB
@@ -49,13 +51,13 @@ graph TB
 
     Client["Client Applications<br/>(Web / Mobile / API)"]:::client
 
-    subgraph APIGateway["API Gateway — NGINX + Spring Boot REST Gateway"]
+    subgraph APIGateway["API Gateway — NGINX + Spring Boot GraphQL Gateway"]
         direction LR
-        REST["REST API Route Handler<br/>Port :5000"]:::gateway
+        GQL["GraphQL API Route Handler<br/>Port :5000"]:::gateway
         AuthMW["JWT Auth & Role<br/>Middleware"]:::gateway
     end
 
-    Client -->|HTTP REST| APIGateway
+    Client -->|GraphQL| APIGateway
 
     subgraph BusinessServices["Business Domain Services (Java Spring Boot)"]
         direction TB
@@ -94,39 +96,40 @@ graph TB
         end
     end
 
-    REST -->|"Spring Boot gRPC Client"| AUTH
-    REST -->|"Spring Boot gRPC Client"| USER
-    REST -->|"Spring Boot gRPC Client"| ROLE
-    REST -->|"Spring Boot gRPC Client"| MERCH
-    REST -->|"Spring Boot gRPC Client"| PROD
-    REST -->|"Spring Boot gRPC Client"| CAT
-    REST -->|"Spring Boot gRPC Client"| BANNER
-    REST -->|"Spring Boot gRPC Client"| SLIDER
-    REST -->|"Spring Boot gRPC Client"| CART
-    REST -->|"Spring Boot gRPC Client"| ORDER
-    REST -->|"Spring Boot gRPC Client"| TXN
-    REST -->|"Spring Boot gRPC Client"| REV
+    GQL -->|"Spring gRPC client"| AUTH
+    GQL -->|"Spring gRPC client"| USER
+    GQL -->|"Spring gRPC client"| ROLE
+    GQL -->|"Spring gRPC client"| MERCH
+    GQL -->|"Spring gRPC client"| PROD
+    GQL -->|"Spring gRPC client"| CAT
+    GQL -->|"Spring gRPC client"| BANNER
+    GQL -->|"Spring gRPC client"| SLIDER
+    GQL -->|"Spring gRPC client"| CART
+    GQL -->|"Spring gRPC client"| ORDER
+    GQL -->|"Spring gRPC client"| TXN
+    GQL -->|"Spring gRPC client"| REV
 
     subgraph Infrastructure["Infrastructure Layer"]
         direction LR
-        PGBOUNCER["PgBouncer<br/>Connection Pooler :6432"]:::infra
-        PG[("PostgreSQL<br/>ECOMMERCE DB")]:::infra
-        REDIS[("Redis Cluster<br/>6-Node Distributed Cache")]:::infra
-        KAFKA[("Kafka Broker<br/>Event Bus")]:::infra
+        PG[("PostgreSQL<br/>ECOMMERCE DB<br/>:5432")]:infra
+        REDIS[("Redis<br/>Standalone Cache :6379")]:infra
+        KAFKA[("Kafka Broker<br/>Event Bus :9092")]:infra
+        CLICKHOUSE[("ClickHouse<br/>Analytics DB :8123")]:infra
     end
 
-    AUTH -->|"JDBC / JPA"| PGBOUNCER
-    USER -->|"JDBC / JPA"| PGBOUNCER
-    ROLE -->|"JDBC / JPA"| PGBOUNCER
-    MERCH -->|"JDBC / JPA"| PGBOUNCER
-    PROD -->|"JDBC / JPA"| PGBOUNCER
-    CAT -->|"JDBC / JPA"| PGBOUNCER
-    CART -->|"JDBC / JPA"| PGBOUNCER
-    ORDER -->|"JDBC / JPA"| PGBOUNCER
-    TXN -->|"JDBC / JPA"| PGBOUNCER
-    REV -->|"JDBC / JPA"| PGBOUNCER
+    AUTH -->|"JDBC + SQL"| PG
+    USER -->|"JDBC + SQL"| PG
+    ROLE -->|"JDBC + SQL"| PG
+    MERCH -->|"JDBC + SQL"| PG
+    PROD -->|"JDBC + SQL"| PG
+    CAT -->|"JDBC + SQL"| PG
+    CART -->|"JDBC + SQL"| PG
+    ORDER -->|"JDBC + SQL"| PG
+    TXN -->|"JDBC + SQL"| PG
+    REV -->|"JDBC + SQL"| PG
 
-    PGBOUNCER --> PG
+    STATS_R --> CLICKHOUSE
+    STATS_W --> CLICKHOUSE
 
     AUTH -->|"Spring Data Redis client"| REDIS
     USER -->|"Spring Data Redis client"| REDIS
@@ -134,13 +137,15 @@ graph TB
     PROD -->|"Spring Data Redis client"| REDIS
     ORDER -->|"Spring Data Redis client"| REDIS
     CART -->|"Spring Data Redis client"| REDIS
-    REST -->|"Spring Data Redis client"| REDIS
+    GQL -->|"Spring Data Redis client"| REDIS
+    STATS_R -->|"Spring Data Redis client"| REDIS
 
     subgraph EventConsumers["Event-Driven Consumers"]
-        EMAIL["Email Service<br/>SMTP Notification Worker"]:::event
+        EMAIL["Email Service<br/>SMTP Notification Worker<br/>HTTP :8094"]:::event
     end
 
     KAFKA -->|"Consume Events"| EMAIL
+    KAFKA -->|"Consume Events"| STATS_W
 
     subgraph Observability["Observability Stack"]
         direction LR
@@ -169,19 +174,19 @@ graph TB
     ORDER -.->|"Publish Order Event"| KAFKA
     TXN -.->|"Publish Transaction Event"| KAFKA
 
-    AUTH -.->|"/metrics"| PROM
-    USER -.->|"/metrics"| PROM
-    PROD -.->|"/metrics"| PROM
-    ORDER -.->|"/metrics"| PROM
-    TXN -.->|"/metrics"| PROM
-    REST -.->|"/metrics"| PROM
+    AUTH -.->|"/actuator/prometheus"| PROM
+    USER -.->|"/actuator/prometheus"| PROM
+    PROD -.->|"/actuator/prometheus"| PROM
+    ORDER -.->|"/actuator/prometheus"| PROM
+    TXN -.->|"/actuator/prometheus"| PROM
+    GQL -.->|"/actuator/prometheus"| PROM
 
     AUTH -.->|"OTLP Spans"| OTEL
     USER -.->|"OTLP Spans"| OTEL
     PROD -.->|"OTLP Spans"| OTEL
     ORDER -.->|"OTLP Spans"| OTEL
     TXN -.->|"OTLP Spans"| OTEL
-    REST -.->|"OTLP Spans"| OTEL
+    GQL -.->|"OTLP Spans"| OTEL
 
     OTEL -.-> JAEGER
     PROMTAIL -.-> LOKI
@@ -199,54 +204,63 @@ graph TB
 
 ## Service Catalog
 
-The modular architecture consists of **21 logical micro-applications** plus supporting database and migrations:
+The microservices architecture consists of **27 independent services** running as separate JVM processes:
 
 ```mermaid
 graph LR
     classDef svc fill:#1e1b4b,stroke:#a78bfa,color:#ede9fe,stroke-width:1px,rx:8
     classDef gw fill:#1e293b,stroke:#22d3ee,color:#cffafe,stroke-width:2px,rx:8,font-weight:bold
     classDef support fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px,rx:8
+    classDef stats fill:#052e16,stroke:#4ade80,color:#dcfce7,stroke-width:1px,rx:8
 
     subgraph Gateway
-        API["API Gateway<br/>Spring Boot REST Router"]:::gw
+        API["API Gateway<br/>Spring GraphQL Router :5000"]:::gw
     end
 
     subgraph Identity["Identity & Access (3)"]
-        A1["auth"]:::svc
-        A2["user"]:::svc
-        A3["role"]:::svc
+        A1["auth :9012"]:::svc
+        A2["user :9011"]:::svc
+        A3["role :9006"]:::svc
     end
 
     subgraph Merchant["Merchant Suite (5)"]
-        M1["merchant"]:::svc
-        M2["merchant_detail"]:::svc
-        M3["merchant_business"]:::svc
-        M4["merchant_policy"]:::svc
-        M5["merchant_award"]:::svc
+        M1["merchant :9005"]:::svc
+        M2["merchant_detail :9022"]:::svc
+        M3["merchant_business :9021"]:::svc
+        M4["merchant_policy :9023"]:::svc
+        M5["merchant_award :9020"]:::svc
     end
 
     subgraph Catalog["Catalog & Marketing (4)"]
-        C1["product"]:::svc
-        C2["category"]:::svc
-        C3["banner"]:::svc
-        C4["slider"]:::svc
+        C1["product :9015"]:::svc
+        C2["category :9014"]:::svc
+        C3["banner :9013"]:::svc
+        C4["slider :9016"]:::svc
     end
 
-    subgraph Commerce["Checkout & Basket (3)"]
-        O1["cart"]:::svc
-        O2["order"]:::svc
-        O3["shipping_address"]:::svc
+    subgraph Commerce["Checkout & Basket (4)"]
+        O1["cart :9003"]:::svc
+        O2["order :9018"]:::svc
+        O3["order_item"]:::svc
+        O4["shipping_address :9028"]:::svc
     end
 
     subgraph Movements["Payments & Reviews (3)"]
-        T1["transaction"]:::svc
-        R1["review"]:::svc
-        R2["review_detail"]:::svc
+        T1["transaction :9009"]:::svc
+        R1["review :9017"]:::svc
+        R2["review_detail :9027"]:::svc
     end
 
-    subgraph Support["Support Services (2)"]
+    subgraph Analytics["Analytics & Stats (3)"]
+        ST1["stats-reader :9015"]:::stats
+        ST2["stats-writer"]:::stats
+        ST3["stats-backfill"]:::stats
+    end
+
+    subgraph Support["Support Services (3)"]
         S1["email-service"]:::support
         S2["common"]:::support
+        S3["seeder"]:::support
     end
 
     API -->|"gRPC Client"| Identity
@@ -254,6 +268,7 @@ graph LR
     API -->|"gRPC Client"| Catalog
     API -->|"gRPC Client"| Commerce
     API -->|"gRPC Client"| Movements
+    API -->|"gRPC Client"| Analytics
 ```
 
 ---
@@ -277,7 +292,7 @@ graph TB
             direction TB
             HANDLER["handler/<br/>gRPC Service Handlers"]:::handler
             SVC["service/ & service.impl/<br/>CQRS Business Logic"]:::service
-            REPO["repository/<br/>Reactive Repositories"]:::repo
+            REPO["repository/<br/>Repositories"]:::repo
             MODEL["entity/ / domain/<br/>Entities & Domain Models"]:::repo
         end
 
@@ -299,7 +314,7 @@ graph TB
     subgraph Infrastructure["External Infrastructure"]
         direction LR
         PGDB[("PostgreSQL")]:::infra
-        RCLUSTER[("Redis Cluster")]:::infra
+        RCLUSTER[("Redis Standalone")]:::infra
         KAFKA[("Kafka Brokers")]:::infra
     end
 
@@ -314,219 +329,52 @@ graph TB
 
 ## Data & Event Flow
 
-### Synchronous Flow (REST Proxy & Cache Read-Through)
+### Synchronous Flow (GraphQL Proxy & Cache Read-Through)
 
-All external client API requests go through the REST endpoints defined in the Spring Boot API Gateway Router. The API Gateway validates the JWT/API Key, connects with the correct downstream gRPC modular server, checks the Redis Cluster cache, and fetches PostgreSQL through PgBouncer if a cache miss occurs.
+All external client API requests go through the GraphQL endpoints defined in the Spring Boot API Gateway Router. The API Gateway validates the JWT/API Key, connects with the correct downstream gRPC microservice, checks the Redis cache, and fetches PostgreSQL if a cache miss occurs.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant C as Client
-    participant GW as API Gateway<br/>(Spring Boot REST Router)
+    participant GW as API Gateway<br/>(Spring GraphQL Router)
     participant SVC as Domain Service<br/>(gRPC Server)
-    participant REDIS as Redis Cluster
-    participant PGB as PgBouncer
+    participant REDIS as Redis
     participant DB as PostgreSQL
 
-    C->>GW: HTTP REST Request (GET/POST/PUT)
+    C->>GW: GraphQL over HTTP Request (GET/POST/PUT)
     GW->>GW: JWT Authentication Check
     GW->>SVC: gRPC Call (Protobuf payload)
-    SVC->>REDIS: Check Cache (Redis Cluster)
+    SVC->>REDIS: Check Cache (Redis)
     alt Cache Hit
         REDIS-->>SVC: Return Cached Response
     else Cache Miss
-        SVC->>PGB: Acquire Connection
-        PGB->>DB: JPA / JDBC Execution
-        DB-->>PGB: DB Result Set
-        PGB-->>SVC: Reactive Rows Mapped
+        SVC->>DB: SQL Execution (HikariCP Pool)
+        DB-->>SVC: DB Result Set
         SVC->>REDIS: Populate Cache for next read
     end
     SVC-->>GW: gRPC Response payload
-    GW-->>C: HTTP REST Response (JSON format)
+    GW-->>C: GraphQL over HTTP Response (JSON format)
 ```
 
-### Asynchronous Flow (Kafka Event Pipeline)
+### Asynchronous Flow (Kafka Notification Event pipeline)
 
-The platform uses **Apache Kafka (KRaft mode)** as its event backbone for **email notifications** (8 domain-specific topics) dispatched through the `EmailService`. All producers use the **Spring Kafka** (`org.springframework.kafka.core.KafkaTemplate`) integrated through Spring Boot, with `acks=all`, idempotent producers, LZ4 compression, and batching for throughput. The **transactional outbox pattern** (`AuthOutboxPublisher`, `MerchantOutboxPublisher`, `TransactionOutboxPublisher`) guarantees at-least-once delivery even during broker outages.
-
-#### Kafka Topics Registry
-
-| # | Topic | Producer Service | Consumer Service | Consumer Group | Commit Mode | Purpose |
-|---|---|---|---|---|---|---|
-| 1 | `email-service-topic-auth-register` | auth (outbox) | email-service | `email-service-group` | Manual | Registration welcome email |
-| 2 | `email-service-topic-auth-forgot-password` | auth (outbox) | email-service | `email-service-group` | Manual | Password reset OTP email |
-| 3 | `email-service-topic-auth-verify-code-success` | auth | email-service | `email-service-group` | Manual | Email verification success |
-| 4 | `email-service-topic-merchant-create` | merchant | email-service | `email-service-group` | Manual | Merchant onboarding welcome |
-| 5 | `email-service-topic-merchant-update-status` | merchant | email-service | `email-service-group` | Manual | Merchant status change notification |
-| 6 | `email-service-topic-merchant-document-create` | merchant | email-service | `email-service-group` | Manual | Merchant document upload notification |
-| 7 | `email-service-topic-merchant-document-update-status` | merchant | email-service | `email-service-group` | Manual | Merchant document status change |
-| 8 | `email-service-topic-transaction-create` | transaction (outbox) | email-service | `email-service-group` | Manual | Transaction receipt/invoice email |
-| 9 | `email-service-topic-email-retry` | email-service | RetryProcessor | `email-service-group` | Manual | Bounded retry queue (max 3 attempts, exponential backoff) |
-| 10 | `email-service-topic-email-dlq` | email-service | — | — | — | Dead-letter queue (terminal failure sink) |
-
-> **Total: 10 Kafka topics** (8 email notification + 2 email infrastructure)
-
-#### Kafka Producer Architecture
-
-Every service that publishes to Kafka (auth, merchant, transaction) defines its own `KafkaProducerConfig` exposing a `KafkaTemplate<String, String>` consumed by the outbox relay. The common producer features:
-
-- **Idempotent producer** (`enable.idempotence=true`, `acks=all`) for exactly-once semantics
-- **LZ4 compression** + **batching** (`linger.ms=5`, `batch.size=16384`) for throughput optimization
-- **Exponential backoff retry** (up to 10 retries, 500ms base) with `delivery.timeout.ms=120000`
-- **Fail-fast validation** — `KafkaProducerConfig.validate()` rejects idempotence without `acks=all` or with out-of-range in-flight requests
-- **Chaos Engineering integration** — the chaos manager evaluates a `kafka` policy per topic and can simulate message drops, rejections, or artificial latency
-- **OpenTelemetry tracing** — `kafka_publish_total` counter (success/failure), `kafka_retry_total` counter
-
-```java
-// Standard producer wiring in each service (auth, merchant, transaction)
-@Configuration
-public class KafkaProducerConfig {
-
-    @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
-    private String bootstrapServers;
-
-    @Bean
-    public ProducerFactory<String, String> producerFactory() {
-        validate();  // enforces acks=all when idempotence=true
-        Map<String, Object> config = new HashMap<>();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        config.put(ProducerConfig.ACKS_CONFIG, "all");
-        config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        config.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
-        config.put(ProducerConfig.LINGER_MS_CONFIG, 5);
-        config.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
-        return new DefaultKafkaProducerFactory<>(config);
-    }
-
-    @Bean
-    public KafkaTemplate<String, String> kafkaTemplate(ProducerFactory<String, String> factory) {
-        return new KafkaTemplate<>(factory);
-    }
-}
-```
-
-#### Transactional Outbox Pattern
-
-The **auth** and **transaction** services implement the **transactional outbox pattern** for reliable event publishing. Events are first written to an outbox table (PostgreSQL) within the same transaction as the business operation, then a scheduled poller (`@Scheduled(fixedDelayString = "${app.outbox.poll-ms:1000}")`) publishes them to Kafka with at-least-once guarantees:
+High-performance transaction modifications trigger background notification events published directly to Apache Kafka brokers. The isolated Email service listens to Kafka, maps the events, and sends SMTP email notifications.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant SVC as AuthService / TransactionService
-    participant DB as PostgreSQL<br/>(outbox table)
-    participant POLLER as OutboxPublisher<br/>(1s polling)
+    participant SVC as Product / Order / Transaction
     participant K as Kafka Broker
-    participant EMAIL as EmailService
+    participant EMAIL as Email Worker Service
     participant SMTP as SMTP Server
 
-    SVC->>DB: Business operation + INSERT INTO outbox (atomic)
-    DB-->>SVC: ✅ Transaction committed
-    POLLER->>DB: SELECT due events + claim (idempotent)
-    POLLER->>K: Publish email event (with retries)
-    K-->>EMAIL: Consume (manual commit)
-    EMAIL->>EMAIL: Idempotency guard (Redis SET NX PX)
-    alt CLAIMED
-        EMAIL->>SMTP: JavaMailSender.send()
-        SMTP-->>EMAIL: ✅ Sent
-        EMAIL->>K: Commit offset
-    else DUPLICATE
-        EMAIL->>K: Skip + Commit offset
-    end
+    SVC->>K: Publish Event (e.g. order.created / transaction.success)
+    K-->>EMAIL: Deliver topic payload (asynchronous consumer)
+    EMAIL->>EMAIL: Map payload details
+    EMAIL->>SMTP: Send custom styled notification
+    SMTP-->>EMAIL: Delivery Confirmation
 ```
-
-Key outbox guarantees:
-- **Atomic writes** — business operation and outbox insert share the same DB transaction
-- **Claim-based polling** — `@Scheduled(fixedDelayString = "${app.outbox.poll-ms:1000}")` polls, claims, and publishes sequentially
-- **Exponential retry** — failed publishes retry with exponential backoff (1s → 300s cap)
-- **Dead-letter** — events exceeding max retries are marked as failed in the outbox
-- **Backlog gauge** — `outbox_backlog{service}` exposed via OTel for monitoring
-
-#### Email Notification Flow
-
-The email worker (`EmailService.java`) is a single consumer subscribing to all 8 notification topics. Key delivery guarantees:
-
-- **Manual commit** — offsets are committed only after a terminal outcome (sent, retry published, or DLQ published)
-- **Pause/resume draining** — consumer pauses on record arrival, processes one-at-a-time, resumes after commit
-- **Idempotency** — Redis-backed `claimEvent()` uses `SETNX` + `EXPIRE` with lease (fail-open to in-memory set if Redis is unavailable)
-- **Bounded retry** — failed SMTP sends are re-published to `email-service-topic-email-retry` with exponential backoff (500ms base, 5-minute cap), up to `kafka.email.retry.max-attempts` (default: 3)
-- **Dead-letter queue** — exhausted retries move to `email-service-topic-email-dlq` (shared across all topics)
-- **Per-partition consumer lag** — exposed as OTel gauge via `TracingMetrics.registerKafkaLagGauge()`
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant SVC as Domain Service<br/>(via outbox or direct)
-    participant K as Kafka Broker
-    participant EMAIL as EmailService<br/>(email-service-group)
-    participant GUARD as Redis IdempotencyGuard
-    participant RETRY as RetryProcessor
-    participant SMTP as SMTP Server
-    participant DLQ as DLQ Topic
-
-    SVC->>K: Publish {event_id, schema_version=1, email, subject, body}
-    K-->>EMAIL: Consume + pause consumer
-    EMAIL->>GUARD: claimEvent(event_id) — SET NX PX
-    alt CLAIMED
-        EMAIL->>SMTP: JavaMailSender.send()
-        SMTP-->>EMAIL: ✅ Sent
-        EMAIL->>GUARD: markSent(event_id) — SENT TTL 24h
-        EMAIL->>K: Commit offset + resume consumer
-    else DUPLICATE
-        EMAIL->>K: Skip + Commit offset + resume consumer
-    else BUSY (lease held)
-        EMAIL->>K: Do NOT commit (retry after backoff)
-    end
-    alt SMTP failure
-        EMAIL->>K: Publish to email-service-topic-email-retry
-        K-->>RETRY: Consume with backoff
-        RETRY->>EMAIL: Re-consume (attempt N+1)
-    end
-    alt max_retries exceeded
-        EMAIL->>K: Publish to email-service-topic-email-dlq
-        EMAIL->>K: Commit offset (terminal)
-    end
-```
-
-#### Kafka Security & Production Configuration
-
-The `KafkaSecurityConfig` utility (email-service module) centralizes SASL/TLS configuration for production:
-
-| Config | Environment Variable | Default | Description |
-|---|---|---|---|
-| `security.protocol` | `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Protocol (`PLAINTEXT` / `SASL_SSL`) |
-| `sasl.mechanism` | `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-256` | SASL mechanism |
-| `sasl.jaas.config` | `KAFKA_SASL_JAAS_CONFIG` | — | JAAS login module config |
-| `ssl.truststore.location` | `KAFKA_SSL_TRUSTSTORE_LOCATION` | — | JKS truststore path |
-| `ssl.keystore.location` | `KAFKA_SSL_KEYSTORE_LOCATION` | — | JKS keystore path |
-| `enable.idempotence` | `KAFKA_IDEMPOTENCE` | `true` | Idempotent producer |
-| `acks` | `KAFKA_ACKS` | `all` | Acknowledgement level |
-
-#### Dependency Health Checks
-
-The email worker exposes a Spring Boot Actuator `SmtpHealthCheck implements HealthIndicator`
-(`email-service` module) that verifies SMTP connectivity with a configurable timeout
-(`smtp.health.timeout-ms`, default: 3000ms). It is registered in the readiness health
-group via `management.endpoint.health.group.readiness.include=readinessState,smtp`
-(parity with Quarkus `/q/health/ready`), and only runs when `smtp.health.enabled=true`.
-
-#### Kafka Metrics (OTel)
-
-| Metric | Type | Description |
-|---|---|---|
-| `kafka_publish_total{status}` | Counter | Producer send success/failure count |
-| `kafka_retry_total` | Counter | Producer retry attempts |
-| `outbox_backlog{service}` | Gauge | Pending outbox events (auth, transaction) |
-| `outbox_published_total{service}` | Counter | Events published from outbox |
-| `email_sent_total` | Counter | Emails successfully sent via SMTP |
-| `email_failed_total` | Counter | Email send attempts that failed |
-| `email_retried_total` | Counter | Emails routed to the retry topic |
-| `email_dlq_total` | Counter | Emails moved to DLQ |
-| `email_duplicate_total` | Counter | Duplicate email events skipped |
-| `email_invalid_event_total` | Counter | Events rejected for invalid envelope |
-| `email_processing_duration_seconds` | Histogram | Email record processing duration |
-| `kafka_consumer_lag{group, partition}` | Gauge | Per-partition consumer lag (email group) |
 
 ---
 
@@ -541,7 +389,7 @@ graph TB
 
     subgraph Sources["Telemetry Sources"]
         direction TB
-        SVCS["All E-Commerce Services<br/>(20+ services)"]:::service
+        SVCS["All E-Commerce Microservices<br/>(27 services)"]:::service
         KAFKA_SRC["Kafka Broker"]:::service
         NODES["Host / Node"]:::service
         DB_SRC["PostgreSQL Engine"]:::service
@@ -549,12 +397,12 @@ graph TB
 
     subgraph Collectors["Collection Layer"]
         direction TB
-        PROM["Prometheus<br/>Scrapes /metrics"]:::collector
+        PROM["Prometheus<br/>Scrapes /actuator/prometheus"]:::collector
         PROMTAIL["Promtail<br/>Ships container logs"]:::collector
         OTEL["OTel Collector<br/>Receives OTLP spans"]:::collector
         NODEX["Node Exporter<br/>CPU / Memory / Disk / Net"]:::collector
         KAFKAX["Kafka Exporter<br/>Topic lag / Broker health"]:::collector
-        PGX["Postgres Exporter<br/>PgBouncer & Query performance"]:::collector
+        PGX["Postgres Exporter<br/>DB Performance"]:::collector
     end
 
     subgraph Storage["Storage Layer"]
@@ -569,7 +417,7 @@ graph TB
         ALERTMGR["Alertmanager<br/>Alert Routing"]:::viz
     end
 
-    SVCS -->|"/metrics"| PROM
+    SVCS -->|"/actuator/prometheus"| PROM
     SVCS -->|"OTLP gRPC"| OTEL
     SVCS -->|"stdout/stderr"| PROMTAIL
     NODES --> NODEX
@@ -599,16 +447,139 @@ graph TB
 
 ## Chaos Engineering Platform
 
-The payment gateway features a built-in **reactive Chaos Engineering engine** to continuously test system resilience under failure conditions (database spikes, slow endpoints, CPU stress, and memory leaks). 
+The payment gateway features a built-in **Chaos Engineering engine** to continuously test system resilience under failure conditions (database spikes, slow endpoints, CPU stress, and memory leaks). 
 
 ### How It Works
-The chaos engine is managed by [ChaosManager.java](./common/src/main/java/com/sanedge/common/chaos/ChaosManager.java) which dynamically watches the configuration file [chaos.yaml](./chaos.yaml) for modifications:
+The chaos engine is managed by [ChaosManager.java](./common/src/main/java/com/sanedge/ecommerce/common/chaos/ChaosManager.java) which dynamically watches the configuration file [chaos.yaml](./chaos.yaml) for modifications:
 - **Dynamic Hot-Reloading**: Every 5 seconds, the engine checks `chaos.yaml` for changes. Adjusting values or toggling policies will update the running system instantly without requiring a service restart.
 
 ### Injection Mechanisms
-1. **HTTP Routing Chaos** ([ChaosHttpMiddleware.java](./common/src/main/java/com/sanedge/common/chaos/ChaosHttpMiddleware.java)): Intercepts API router entry points to inject specified latency hikes or HTTP errors (e.g., status code 429 - rate limits).
-2. **Database SQL Chaos** ([ChaosSqlProxy.java](./common/src/main/java/com/sanedge/common/chaos/ChaosSqlProxy.java)): Wraps database clients in a dynamic proxy, injecting database transaction latency or simulating sudden lock wait timeouts/deadlocks when queries hit matching tables.
-3. **Resource Stress Chaos** ([ChaosResourceSabotage.java](./common/src/main/java/com/sanedge/common/chaos/ChaosResourceSabotage.java)): Spawns CPU/memory pressure routines to simulate container hardware throttling or memory exhaustion.
+1. **HTTP Routing Chaos** ([ChaosHttpMiddleware.java](./common/src/main/java/com/sanedge/ecommerce/common/chaos/ChaosHttpMiddleware.java)): Intercepts API router entry points to inject specified latency hikes or HTTP errors (e.g., status code 429 - rate limits).
+2. **Database SQL Chaos** ([ChaosSqlProxy.java](./common/src/main/java/com/sanedge/ecommerce/common/chaos/ChaosSqlProxy.java)): Wraps database clients in a dynamic proxy, injecting database transaction latency or simulating sudden lock wait timeouts/deadlocks when queries hit matching tables.
+3. **Resource Stress Chaos** ([ChaosResourceSabotage.java](./common/src/main/java/com/sanedge/ecommerce/common/chaos/ChaosResourceSabotage.java)): Spawns CPU/memory pressure routines to simulate container hardware throttling or memory exhaustion.
+
+---
+
+## Kafka Event Architecture
+
+The platform uses **Apache Kafka** as the asynchronous event backbone. Events are published via the **transactional outbox pattern** for reliability, and consumed by domain-specific consumers. The full audit is documented in [KAFKA_AUDIT.md](./KAFKA_AUDIT.md).
+
+### Topic Registry Summary
+
+| Category | Topics | Producer → Consumer | Delivery |
+| :------- | :----- | :------------------ | :------- |
+| **Email Notifications (8)** | `email-service-topic-auth-register`, `-auth-forgot-password`, `-auth-verify-code-success`, `-merchant-create`, `-merchant-update-status`, `-merchant-document-create`, `-merchant-document-update-status`, `-transaction-create` | Auth/Merchant/Transaction → Email Service | Fire-and-forget + DLQ |
+| **Merchant Cache Invalidation** | `merchant-service-topic-transaction-event` | Transaction (outbox) → Merchant | Cache evict |
+| **Transaction Cache Invalidation** | `transaction-service-topic-merchant-status-event` | Merchant → Transaction | Cache evict |
+
+### Transactional Outbox Pattern
+
+The Transaction Service writes events to an `outbox` table **within the same database transaction** as business data. The `OutboxPublisher` background worker then relays events to Kafka asynchronously, guaranteeing **no event loss** even during Kafka outages.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant TXN as Transaction Service
+    participant DB as PostgreSQL (outbox table)
+    participant OP as OutboxPublisher
+    participant K as Kafka Broker
+    participant EMAIL as Email Service
+    participant MERCH as Merchant Service
+
+    TXN->>DB: INSERT business data + outbox event (same tx)
+    TXN-->>DB: COMMIT
+    OP->>DB: Poll PENDING events
+    DB-->>OP: Outbox rows
+    OP->>K: Publish to email-service-topic-transaction-create
+    OP->>K: Publish to merchant-service-topic-transaction-event
+    K-->>EMAIL: Deliver email payload
+    K-->>MERCH: Deliver cache invalidation event
+    EMAIL->>EMAIL: Send notification email
+    MERCH->>MERCH: Evict merchant cache
+```
+
+### Consumer Architecture
+
+| Consumer | Group | Topics | Behavior |
+| :------- | :---- | :----- | :------- |
+| **EmailService** | `email-service-group` | 8 email topics | Manual commit, DLQ on exhausted retry, process-local dedup |
+| **MerchantKafkaConsumerService** | `merchant-service-group` | `merchant-service-topic-transaction-event` | Evict merchant cache |
+| **TransactionKafkaConsumerService** | `transaction-service-group` | `transaction-service-topic-merchant-status-event` | Evict transaction cache |
+
+### Dead Letter Queue (DLQ)
+
+Email topics support DLQ: on exhausted retries, events are published to `<topic>.dlq` with envelope `{ original_topic, original_partition, original_offset, failure, payload }`. Manual commit ensures no message loss.
+
+---
+
+## ClickHouse Analytics Layer
+
+The platform uses **ClickHouse** as a columnar analytics database for high-performance statistical queries, decoupled from the transactional PostgreSQL store.
+
+### Architecture
+
+| Component | Role | Description |
+| :-------- | :--- | :----------- |
+| **stats-reader** | gRPC Analytics Server (port `:9015`, HTTP `:8096`) | Serves pre-aggregated statistical queries via gRPC. Each handler builds SQL queries against ClickHouse, caches results in Redis with configurable TTL (300s default). |
+| **stats-writer** | Kafka Consumer (HTTP `:8095`) | Consumes domain events from Kafka topics (`stats.payment.*.event`), deduplicates, batches, and writes to ClickHouse tables in near-real-time. |
+| **stats-backfill** | One-shot Batch Loader | Reads historical rows from OLTP PostgreSQL tables, enqueues events into outbox tables (status PENDING), which are relayed to Kafka via `OutboxPublisher` → `stats-writer` → ClickHouse. |
+
+### Query Flow
+
+```mermaid
+sequenceDiagram
+    participant GW as API Gateway
+    participant SR as Stats Reader (gRPC :9015)
+    participant CH as ClickHouse
+    participant R as Redis Cache
+
+    GW->>SR: gRPC: FindMonthlyTotalRevenue
+    SR->>R: Check cache (stats:order:revenue:monthly)
+    alt Cache Hit
+        R-->>SR: Return cached JSON
+    else Cache Miss
+        SR->>CH: HTTP SELECT query
+        CH-->>SR: Columnar result set
+        SR->>R: Cache with TTL (300s default)
+    end
+    SR-->>GW: gRPC ApiResponse
+```
+
+### Stats Writer Pipeline
+
+```mermaid
+sequenceDiagram
+    participant SVC as Domain Service
+    participant K as Kafka (stats.payment.*.event)
+    participant SW as Stats Writer
+    participant CH as ClickHouse
+
+    SVC->>K: Publish event (outbox relay)
+    K-->>SW: Consume batch
+    SW->>SW: EventDedup (process-local)
+    SW->>SW: Accumulate in buffer
+    SW->>CH: FlushScheduler batch INSERT
+    CH-->>SW: Ack
+```
+
+| Component | Purpose |
+| :-------- | :------ |
+| `StatsKafkaConsumer` | Kafka consumer subscribes to `stats.payment.*.event` topics |
+| `EventDedup` | Process-local deduplication to prevent duplicate writes |
+| `ClickHouseBatchWriter` | Batch INSERT into ClickHouse tables |
+| `FlushScheduler` | Timer-based flush: accumulates events, flushes every N seconds |
+| `ClickHouseSchemaInitializer` | Auto-creates ClickHouse tables on startup |
+
+### Stats Backfill Job
+
+One-shot job for bootstrapping ClickHouse with historical data from PostgreSQL. Writing through the outbox gives **idempotency for free** — re-running hits the unique `event_id` constraint (`backfill:<domain>:<id>`) and inserts nothing.
+
+**Usage:**
+
+```sh
+BACKFILL_DOMAINS=all java -jar stats-backfill/target/*.jar
+BACKFILL_DOMAINS=transaction,order BACKFILL_FROM=2024-01-01T00:00:00Z java -jar stats-backfill/target/*.jar
+```
 
 ---
 
@@ -616,7 +587,7 @@ The chaos engine is managed by [ChaosManager.java](./common/src/main/java/com/sa
 
 ### Docker Compose (Local Development)
 
-The Docker Compose configuration provisions only the local infrastructure and observability stack: PostgreSQL, PgBouncer, a 6-node Redis Cluster, Kafka, OpenTelemetry, Prometheus, Grafana, Loki, Jaeger, Alertmanager, Pyroscope, and exporters. Java endpoints are run directly on the host so they can be developed and debugged without Java containers.
+The Docker Compose configuration provisions PostgreSQL, Redis, Kafka, and observability containers. Java services run as **independent JVM processes** on the host, each with its own gRPC server and database connection pool — true microservice deployment.
 
 ```mermaid
 flowchart TB
@@ -630,7 +601,7 @@ flowchart TB
 
         subgraph Gateway["API Gateway"]
             NGINX["NGINX Proxy :80"]:::gateway
-            APIGW["API Gateway Container<br/>Spring Boot REST Gateway :5000"]:::gateway
+            APIGW["API Gateway Container<br/>Spring Boot GraphQL Gateway :5000"]:::gateway
         end
 
         subgraph Services["Core Service Containers"]
@@ -659,9 +630,9 @@ flowchart TB
 
         subgraph Infra["Infrastructure Suite"]
             PG[("PostgreSQL :5432")]:::infra
-            PGB[("PgBouncer :6432")]:::infra
-            REDIS_CLUSTER[("Redis Cluster :6379-6384<br/>6 Nodes Enabled")]:::infra
+            REDIS[("Redis Standalone :6379")]:::infra
             KAFKA[("Kafka Broker :9092")]:::infra
+            CLICKHOUSE[("ClickHouse :8123")]:::infra
         end
 
         subgraph Obs["Observability Stack"]
@@ -693,25 +664,23 @@ flowchart TB
     APIGW -->|gRPC| ORDER
     APIGW -->|gRPC| TXN
 
-    AUTH -->|SQL| PGB
-    USER -->|SQL| PGB
-    ROLE -->|SQL| PGB
-    MERCH -->|SQL| PGB
-    PROD -->|SQL| PGB
-    CAT -->|SQL| PGB
-    CART -->|SQL| PGB
-    ORDER -->|SQL| PGB
-    TXN -->|SQL| PGB
+    AUTH -->|SQL| PG
+    USER -->|SQL| PG
+    ROLE -->|SQL| PG
+    MERCH -->|SQL| PG
+    PROD -->|SQL| PG
+    CAT -->|SQL| PG
+    CART -->|SQL| PG
+    ORDER -->|SQL| PG
+    TXN -->|SQL| PG
 
-    PGB --> PG
-
-    AUTH -->|Cache| REDIS_CLUSTER
-    USER -->|Cache| REDIS_CLUSTER
-    ROLE -->|Cache| REDIS_CLUSTER
-    PROD -->|Cache| REDIS_CLUSTER
-    CART -->|Cache| REDIS_CLUSTER
-    ORDER -->|Cache| REDIS_CLUSTER
-    APIGW --> REDIS_CLUSTER
+    AUTH -->|Cache| REDIS
+    USER -->|Cache| REDIS
+    ROLE -->|Cache| REDIS
+    PROD -->|Cache| REDIS
+    CART -->|Cache| REDIS
+    ORDER -->|Cache| REDIS
+    APIGW --> REDIS
 
     AUTH -->|gRPC| USER
     AUTH -->|gRPC| ROLE
@@ -780,7 +749,7 @@ flowchart TB
             NGINX_POD["nginx-pods"]:::pod
         end
 
-        subgraph GatewayServices["REST API Gateway (Scalable Deployment)"]
+        subgraph GatewayServices["GraphQL API Gateway (Scalable Deployment)"]
             APIGW_SVC["apigateway-service<br/>(ClusterIP :5000)"]:::k8sSvc
             APIGW_PODS["apigateway-pods"]:::pod
             APIGW_HPA["apigateway-hpa"]:::hpa
@@ -823,15 +792,12 @@ flowchart TB
         end
 
         subgraph DataObservability["Infrastructure & Databases"]
-            PGB_SVC["pgbouncer-service<br/>(ClusterIP :6432)"]:::k8sSvc
-            PGB_POD["pgbouncer-pods"]:::pod
-
             PG_SVC["postgres-service<br/>(ClusterIP :5432)"]:::k8sSvc
             PG_POD["postgres-pods"]:::pod
-            
-            REDIS_SVC["redis-cluster-service<br/>(ClusterIP :6379)"]:::k8sSvc
-            REDIS_SET[("redis-cluster StatefulSet<br/>(6-Node Shards)")]:::stateful
-            
+
+            REDIS_SVC["redis-service<br/>(ClusterIP :6379)"]:::k8sSvc
+            REDIS_POD["redis-pod"]:::pod
+
             KAFKA_SVC["kafka-service<br/>(ClusterIP :9092)"]:::k8sSvc
             KAFKA_POD["kafka-pods"]:::pod
         end
@@ -897,19 +863,15 @@ flowchart TB
     ORDER_SVC --> ORDER_POD
     TX_SVC --> TX_POD
 
-    AUTH_POD -->|SQL| PGB_SVC
-    USER_POD -->|SQL| PGB_SVC
-    ROLE_POD -->|SQL| PGB_SVC
-    MERCH_POD -->|SQL| PGB_SVC
-    PROD_POD -->|SQL| PGB_SVC
-    CAT_POD -->|SQL| PGB_SVC
-    CART_POD -->|SQL| PGB_SVC
-    ORDER_POD -->|SQL| PGB_SVC
-    TX_POD -->|SQL| PGB_SVC
-
-    PGB_SVC --> PGB_POD
-    PGB_POD -->|SQL| PG_SVC
-    PG_SVC --> PG_POD
+    AUTH_POD -->|SQL| PG_SVC
+    USER_POD -->|SQL| PG_SVC
+    ROLE_POD -->|SQL| PG_SVC
+    MERCH_POD -->|SQL| PG_SVC
+    PROD_POD -->|SQL| PG_SVC
+    CAT_POD -->|SQL| PG_SVC
+    CART_POD -->|SQL| PG_SVC
+    ORDER_POD -->|SQL| PG_SVC
+    TX_POD -->|SQL| PG_SVC
 
     AUTH_POD -->|Cache| REDIS_SVC
     USER_POD -->|Cache| REDIS_SVC
@@ -918,7 +880,7 @@ flowchart TB
     CART_POD -->|Cache| REDIS_SVC
     ORDER_POD -->|Cache| REDIS_SVC
 
-    REDIS_SVC --> REDIS_SET
+    REDIS_SVC --> REDIS_POD
 
     AUTH_POD -->|gRPC| USER_SVC
     AUTH_POD -->|gRPC| ROLE_SVC
@@ -1106,22 +1068,20 @@ graph TD
 
 ## Technology Stack
 
-| Category | Selected Technologies | Version | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Language** | Java 21 | 21 | Servlet-based Java execution. |
-| **Framework** | Spring Boot | 3.5.6 | Framework with gRPC, REST, GraphQL, and JPA support. |
-| **API Gateway** | Spring Boot WebMvc | — | REST API Gateway router and reverse proxy. |
-| **RPC** | gRPC + Protobuf | 1.70.0 / 4.29.3 | Contract-first synchronous inter-service communication. |
-| **Database** | PostgreSQL | 17 | ACID ledger persistent storage with per-service schema isolation. |
-| **DB Migrations** | Flyway | — | Incremental database schema version manager. |
-| **Caching** | Redis (Standalone + Cluster) | 7.4 | Distributed key-value cache with per-service prefix keys. |
-| **Messaging** | Apache Kafka | KRaft mode | Asynchronous event bus: 8 email topics + 2 infra (retry + DLQ). |
-| **Auth** | JWT (java-jwt) | — | Stateless request authentication with access/refresh token lifecycle. |
-| **Observability** | OpenTelemetry + Jaeger + Prometheus + Grafana + Loki | — | Distributed tracing, metrics, logging, and alerting. |
-| **Chaos Engineering** | Custom (HTTP/SQL/gRPC/Kafka interceptors) | — | Hot-reload chaos policies for resilience testing. |
-| **Testing** | JUnit 5 + Spring Boot Test | — | Unit, handler, and integration tests per module. |
-| **Docker** | Compose | — | Local environment orchestration (Redis cluster, Kafka, PG). |
-| **Orchestrator** | Kubernetes + ArgoCD | — | Production auto-scaling with GitOps sync waves. |
+| Category | Selected Technologies | Purpose |
+| :--- | :--- | :--- |
+| **Language** | Java 21 (Spring Boot v3.5.6) | Spring Boot services (servlet-based Spring GraphQL + Spring Data JPA) with non-blocking gRPC (Netty) for inter-service calls. |
+| **API Edge Gateway** | Spring GraphQL | GraphQL API Gateway router and reverse proxy destination. |
+| **RPC Inter-service** | Spring gRPC (server & client) | Blazing fast, contract-first synchronous gRPC communication. |
+| **Database** | PostgreSQL v17 | Safe ACID ledger persistent storage system. |
+| **DB Migrations** | Flyway | Incremental database schema version manager run on startup. |
+| **Caching Tier** | Redis (Standalone) | In-memory key-value cache layer per service. |
+| **Analytics DB** | ClickHouse | Columnar OLAP database for high-performance statistical queries. |
+| **Messaging Stream** | Apache Kafka | Asynchronous high-throughput messaging event bus with transactional outbox (KRaft mode). |
+| **Token Manager** | JWT | Secure stateless request authentication standard. |
+| **Observability** | OpenTelemetry + Jaeger | Distributed telemetry tracing pipeline and visualization. |
+| **Docker Engine** | Compose | Local environment virtualization orchestration. |
+| **Orchestrator** | Kubernetes | Production-scale auto-scaling pod clustering infrastructure. |
 
 ---
 
@@ -1140,119 +1100,103 @@ Ensure the following system packages are locally configured:
 ### 1. Clone the Workspace
 
 ```sh
-git clone https://github.com/MamangRust/example-ecommerce-springboot.git
-cd example-ecommerce-springboot
+git clone https://github.com/MamangRust/microservice-springboot-ecommerce.git
+cd microservice-springboot-ecommerce
 ```
 
-### 2A. Full Docker Compose (All-in-One)
+### 2. Prepare Environment Configurations
 
-Builds every infrastructure container **and** every Java service from its own
-Dockerfile, then starts the whole stack:
+Setup the system configurations from placeholders:
 
 ```sh
-docker compose -f deployments/local/docker-compose.yml up -d --build
+# Copy root variables
+cp .env.example .env
+
+# Copy local docker settings overrides
+cp deployments/local/docker.env.example deployments/local/docker.env
 ```
 
-Flyway migrations run automatically on the `db-migration` container, and the
-gateway comes up on `http://localhost:8080`. Verify service health:
+### 3. Build the Maven Project
+
+Compile all submodules and build the executable JAR files:
 
 ```sh
-docker compose -f deployments/local/docker-compose.yml ps
-curl http://localhost:8080/actuator/health
+mvn clean install
 ```
 
-To stop the stack (and remove volumes):
+### 4. Build Docker Images and Start Environment
+
+Use the included build script to compile the service Docker images, then boot the Docker Compose stack:
 
 ```sh
-docker compose -f deployments/local/docker-compose.yml down -v
+# Start only local infrastructure and observability (no Java containers)
+docker compose --env-file deployments/local/docker.env -f deployments/local/docker-compose.yml up -d
 ```
 
-### 2B. Local Development (Infrastructure in Docker, Java on the Host)
-
-Faster iteration — run only the dependencies in Docker and the Spring Boot
-services as local JVMs.
+For host-local Java processes, load the environment and use the packaged Spring Boot artifacts:
 
 ```sh
-# 1. Start only infrastructure (postgres, pgbouncer, redis cluster, kafka)
-docker compose -f deployments/local/docker-compose-infra.yml up -d
-
-# 2. Build the project
-mvn clean install -DskipTests
-
-# 3. Run the Flyway migrations (standalone, no web server)
-java -jar db-migration/target/db-migration-0.0.1-SNAPSHOT.jar
-
-# 4. Start the services (each binds its own gRPC port; gateway serves HTTP :8080)
-java -jar gateway/target/gateway-0.0.1-SNAPSHOT.jar
-java -jar auth/target/auth-0.0.1-SNAPSHOT.jar
-java -jar user/target/user-0.0.1-SNAPSHOT.jar
-java -jar role/target/role-0.0.1-SNAPSHOT.jar
-# ... repeat for merchant*, category, product, banner, slider, cart, order,
-#     order_item, review, review_detail, shipping_address, transaction, email-service
+set -a
+source deployments/local/docker.env
+set +a
+mvn install -DskipTests
 ```
 
-Each service resolves its downstream gRPC peers via `*_SERVICE_HOST` env vars
-(default `localhost`) and its database via `<SERVICE>_DB_*` env vars — see
-`deployments/local/docker.env` for the full host-local set.
-
-### 3. Verify Services
+Each microservice starts as an independent JVM process with its own gRPC server:
 
 ```sh
-# Gateway (HTTP + Actuator)
-curl http://localhost:8080/actuator/health
-
-# Email worker (HTTP + Actuator)
-curl http://localhost:8092/actuator/health
+java -Dserver.port=8081 -jar user/target/*.jar &
+java -Dserver.port=8082 -jar auth/target/*.jar &
+# ... etc for each service
 ```
 
-The gRPC business modules (`auth`, `user`, `role`, …) bind only their gRPC port
-(`grpc.server.port`) and expose no HTTP/actuator surface, so they are probed over
-TCP rather than HTTP.
+To verify the infrastructure stack:
+
+```sh
+docker compose --env-file deployments/local/docker.env -f deployments/local/docker-compose.yml ps
+```
 
 ---
 
 ## Port Map Registry
 
-### Application Services
+| Application/Service | gRPC Port | HTTP Port | Description |
+| :--- | :--- | :--- | :--- |
+| **API Gateway** | — | `5000` | GraphQL API entry point, proxies to gRPC |
+| **Auth Service** | `9012` | `8092` | JWT authentication & registration |
+| **User Service** | `9011` | `8091` | User profile management |
+| **Role Service** | `9006` | `8086` | RBAC & permission management |
+| **Merchant Service** | `9005` | `8085` | Merchant onboarding & profiling |
+| **Merchant Detail** | `9022` | `8087` | Merchant profile details |
+| **Merchant Business** | `9021` | `8101` | Merchant business data |
+| **Merchant Policy** | `9023` | `8088` | Merchant policy management |
+| **Merchant Award** | `9020` | `8102` | Merchant performance awards |
+| **Product Service** | `9015` | `8095` | Product catalog CRUD |
+| **Category Service** | `9014` | `8094` | Product categorization |
+| **Banner Service** | `9013` | `8093` | Promo banners |
+| **Slider Service** | `9016` | `8104` | Home carousel slides |
+| **Cart Service** | `9003` | `8083` | Shopping cart operations |
+| **Order Service** | `9018` | `8098` | Checkout & order flows |
+| **Shipping Address** | `9028` | `8100` | Customer addresses |
+| **Transaction Service** | `9009` | `8089` | Financial audit register |
+| **Review Service** | `9017` | `8097` | Ratings & feedback |
+| **Review Detail** | `9027` | `8099` | Detailed review context |
+| **Stats Reader** | `9015` | `8096` | ClickHouse analytics queries |
+| **Stats Writer** | — | `8095` | ClickHouse event consumer |
+| **Email Service** | — | `8094` | Kafka SMTP notifications |
+| **Infrastructure** | | | |
+| **NGINX Reverse Proxy** | — | `80` | Edge reverse proxy |
+| **Grafana Dashboard** | — | `3000` | Dashboards (`admin`/`admin`) |
+| **Prometheus** | — | `9090` | Metrics engine |
+| **Jaeger** | — | `16686` | Distributed tracing UI |
+| **PostgreSQL** | — | `5432` | Database engine |
+| **ClickHouse** | — | `8123` | Analytics OLAP database |
 
-| Service | gRPC Port | HTTP Port |
-| :--- | :---: | :---: |
-| Gateway | — | 8080 |
-| Auth | 9120 | — |
-| User | 9102 | — |
-| Role | 9101 | — |
-| Cart | 9113 | — |
-| Product | 9110 | — |
-| Category | 9109 | — |
-| Merchant | 9103 | — |
-| Merchant Detail | 9106 | — |
-| Merchant Business | 9105 | — |
-| Merchant Policy | 9107 | — |
-| Merchant Award | 9104 | — |
-| Merchant Social Link | 9108 | — |
-| Banner | 9111 | — |
-| Slider | 9112 | — |
-| Order | 9114 | — |
-| Order Item | 9115 | — |
-| Transaction | 9119 | — |
-| Review | 9116 | — |
-| Review Detail | 9117 | — |
-| Shipping Address | 9118 | — |
-| Email Service | — | 8092 |
+To stop the development system and clean up resources:
 
-### Infrastructure
-
-| Component | Port | URL |
-| :--- | :---: | :--- |
-| PostgreSQL | 5432 | `localhost:5432` |
-| Redis Standalone | 6399 | `localhost:6399` |
-| Redis Cluster | 6379–6384 | `localhost:6379`–`6384` |
-| Kafka | 9092 | `localhost:9092` |
-| Grafana | 3000 | [http://localhost:3000](http://localhost:3000) *(admin/admin)* |
-| Prometheus | 9090 | [http://localhost:9090](http://localhost:9090) |
-| Jaeger | 16686 | [http://localhost:16686](http://localhost:16686) |
-| Loki | 3100 | `localhost:3100` |
-| OTel Collector | 4317 | `localhost:4317` |
+```sh
+docker-compose -f deployments/local/docker-compose.yml down -v
+```
 
 ---
 
@@ -1260,15 +1204,12 @@ TCP rather than HTTP.
 
 | Command | Scope |
 | :--- | :--- |
-| `mvn clean install -DskipTests` | Compiles all 23 submodules and generates executable JARs. |
-| `mvn clean install` | Full build with unit tests. |
-| `mvn install -pl common -DskipTests` | Rebuild only the shared `common` module (proto stubs, RedisService, chaos engine). |
-| `java -jar <module>/target/<module>-0.0.1-SNAPSHOT.jar` | Start a single Spring Boot service. |
-| `java -jar db-migration/target/db-migration-0.0.1-SNAPSHOT.jar` | Run Flyway database migrations. |
-| `docker compose -f deployments/local/docker-compose.yml up -d --build` | Build every service from its Dockerfile and start the full stack. |
-| `docker compose -f deployments/local/docker-compose-infra.yml up -d` | Start infrastructure only (PostgreSQL, Redis, Kafka). |
-| `docker compose -f deployments/local/docker-compose-infra.yml down -v` | Stop infrastructure and remove volumes. |
-| `curl http://localhost:8080/actuator/health` | Verify gateway health. |
+| `mvn clean install` | Cleans target directories, runs tests, compiles all submodules, and generates package JARs. |
+| `mvn compile` | Compiles raw Java source files for all modules. |
+| `./build-docker-images.sh` | Orchestrates the build of Docker images for all Spring Boot microservices. |
+| `docker compose --env-file deployments/local/docker.env -f deployments/local/docker-compose.yml up -d` | Launches infrastructure and observability containers only; Java services run locally on the host. |
+| `docker compose --env-file deployments/local/docker.env -f deployments/local/docker-compose.yml down` | Stops infrastructure/observability containers without deleting volumes. |
+| `docker compose --env-file deployments/local/docker.env -f deployments/local/docker-compose.yml logs -f <service>` | Follows logs for an infrastructure/observability container. |
 
 ---
 
@@ -1276,13 +1217,38 @@ TCP rather than HTTP.
 
 ```
 ecommerce/
-├── pom.xml                         # Root Maven Parent POM (23 modules)
-├── chaos.yaml                      # Chaos engineering policy configuration
-├── common/                         # Shared Maven library + protobuf contracts
-│   └── src/main/proto/             #   Proto definitions (22 domains)
-├── db-migration/                   # Flyway database migration runner
-├── gateway/                        # REST API Gateway (HTTP → gRPC reverse proxy)
-├── auth/                           # Authentication engine (JWT, register, login)
+├── pom.xml                         # Root Maven Parent POM
+├── common/src/main/proto/          # Protobuf contracts (22 domains)
+│   ├── auth.proto                  #   Identity tokens contracts
+│   ├── banner/                     #   Promo Banners
+│   ├── cart/                       #   Shopping Cart specifications
+│   ├── category/                   #   Product Classification specifications
+│   ├── common/                     #   Shared protobuf data types
+│   ├── merchant/                   #   Merchant account declarations
+│   ├── merchant_award/             #   Merchant Awards specifications
+│   ├── merchant_business/          #   Merchant Business declarations
+│   ├── merchant_detail/            #   Merchant Profiles specifications
+│   ├── merchant_document/          #   Verification files specifications
+│   ├── merchant_policy/            #   Merchant Policy specifications
+│   ├── merchant_social_link/       #   Merchant Social Link specifications
+│   ├── order/                      #   Checkout Orders specifications
+│   ├── order_item/                 #   Checkout Order Items details
+│   ├── product/                    #   Product Catalog specifications
+│   ├── review/                     #   Ratings specifications
+│   ├── review_detail/              #   Ratings context specifications
+│   ├── role/                       #   Role mapping specifications
+│   ├── shipping_address/           #   Customer Address specifications
+│   ├── slider/                     #   Front Sliders specifications
+│   ├── transaction/                #   General audit register specifications
+│   └── user/                       #   User CRUD data properties
+├── common/                         # Shared Maven library Module
+│   └── src/main/java/com/sanedge/ecommerce/common/
+│       ├── config/                 #   AppConfig, JwtConfig, RedisConfig, FlywayConfig
+│       ├── observability/          #   TracingMetrics config
+│       ├── service/                #   RedisService utilities
+│       └── pb/                     #   Compiled Java Protobuf gRPC stubs
+├── gateway/                        # GraphQL API Gateway (GraphQL Router proxying to gRPC)
+├── auth/                           # Authentication engine service
 ├── user/                           # User profiles service (CQRS)
 ├── role/                           # RBAC authorization service
 ├── merchant/                       # Merchant onboarding & reports service
@@ -1290,56 +1256,28 @@ ecommerce/
 ├── merchant_business/              # Merchant business data registry service
 ├── merchant_policy/                # Merchant policy management service
 ├── merchant_award/                 # Merchant performance awards service
-├── merchant_social_link/           # Merchant social link service
 ├── product/                        # Product catalog management service
 ├── category/                       # Product catalog categorization service
 ├── banner/                         # Front promo banners service
 ├── slider/                         # Home carousels sliders service
 ├── cart/                           # Shopping cart service
 ├── order/                          # Order and checkout processor service
-├── order_item/                     # Order item decomposition service
 ├── shipping_address/               # Shipping addresses service
 ├── transaction/                    # Financial ledger & payments service
 ├── review/                         # Ratings and review submissions service
 ├── review_detail/                  # Detailed review context service
 ├── email-service/                  # Asynchronous Kafka notifications service
-├── hurl/                           # Hurl HTTP test snippets (auth flow)
+├── stats-reader/                   # Stats Reader — ClickHouse gRPC queries (gRPC :9015 | HTTP :8096)
+├── stats-writer/                   # Stats Writer — Kafka→ClickHouse batch consumer (HTTP :8095)
+├── stats-backfill/                 # Stats Backfill — one-shot PostgreSQL→outbox→Kafka→ClickHouse loader
+├── seeder/                         # Seeder — DB seed data loader
 ├── deployments/
-│   ├── local/                      #   Docker compose files
-│   │   ├── docker-compose.yml       # Full stack (infra + all services)
-│   │   └── docker-compose-infra.yml # Infra only (PG, Redis, Kafka)
-│   ├── kubernetes/                 #   Production K8s deployment manifests
-│   └── gitops/                     #   ArgoCD app-of-apps manifests
-├── observability/                  #   Telemetry pipelines (Loki, OTEL, Alertmanager)
+│   ├── local/                      #   Docker compose infrastructure files
+│   └── kubernetes/                 #   Production K8s deployment manifests
+├── observability/                  #   Telemetry pipelines configurations (Loki, OTEL, Alertmanager)
 ├── grafana/                        #   Pre-configured dashboard JSON files
-└── nginx/                          #   Reverse-proxy NGINX rules
-```
-
----
-
-## Testing
-
-Each business module ships its own test suite built on **JUnit 5** + **Spring Boot Test**,
-covering handlers, services, and repositories (e.g. `AuthApplicationTests`,
-`EmailServiceTest`, `SmtpHealthCheckTest`, and per-module integration tests).
-
-```sh
-# Run every module's tests
-mvn test
-
-# Run a single module's tests
-mvn -pl auth test
-mvn -pl email-service test
-
-# Skip tests during a packaging build
-mvn clean install -DskipTests
-```
-
-A small **Hurl** snippet (`hurl/auth.hurl`) documents the basic auth HTTP flow
-(login → capture tokens → `/me`) for manual smoke-testing against a running gateway:
-
-```sh
-hurl --variable base_url=http://localhost:8080 hurl/auth.hurl
+├── nginx/                          #   Reverse-proxy NGINX rules
+└── images/                         #   Architecture diagrams & dashboard screenshots
 ```
 
 ---
@@ -1351,5 +1289,5 @@ This project is open-sourced under the MIT License for educational and developme
 ---
 
 <p align="center">
-  Built with Java 21, Spring Boot 3.5.6, gRPC, Apache Kafka, PostgreSQL, and Redis Cluster — a passion for high-performance modular monoliths.
+  Built with Java, Spring Boot, gRPC, Apache Kafka, ClickHouse, and a passion for high-performance microservices.
 </p>
